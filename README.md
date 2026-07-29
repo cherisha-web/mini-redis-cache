@@ -5,7 +5,6 @@ A key-value cache server built from scratch in C++, implementing the same core i
 real systems like Redis and Memcached — an in-memory store, LRU eviction, TCP networking,
 and concurrent client handling.
 
-> Status: in progress. This README reflects what's actually built so far — see checklist below.
 
 ## What it does
 
@@ -56,32 +55,34 @@ Disk file (persistence)
 ## Build & run
 
 ```bash
-g++ -std=c++17 -pthread -o cache_server src/main.cpp
-./cache_server
+  g++ -std=c++17 -o cache server.cpp
+ ./cache
 ```
-
-*(Update this once you have an actual build setup — CMake, multiple source files, etc.)*
 
 ## Example usage
 
 ```
 > SET name Cherry
 OK
-> GET name
 Cherry
 > DELETE name
 OK
 ```
 
-*(Once networking is added, show the client-side usage here too — e.g. `./cache_client SET name Cherry`.)*
+*(e.g. `./cache_client SET name Cherry`.)*
 
 ## Design decisions & what I learned
 
-- Why a hash map + doubly linked list, and not some other structure, for LRU?
+- Why a unordered_map + doubly linked list, and not some other structure, for LRU?
+DLL (doubly linked list) maintains the order of usage allowing to insert a node in the front and remove from the back in O(1) time, unordered map helps look up values and delete nodes in O(1) average time instead of using DLL alone which will take O(n).
+
 - What race condition did you actually hit while adding multi-threading, and how did you fix it?
+Since multiple client threads share the same unordered_map and doubly linked list, two threads could execute put(), get(), or DELETE() simultaneously. For example, two put() operations could both modify head->frontptr at the same time, corrupting the linked list or leaving the cache in an inconsistent state. I fixed this by protecting the critical section with a global std::mutex and std::lock_guard, so only one thread modifies the shared cache at a time.
+
 - What would break first if this had to handle real production traffic, and why?
-   to compile : g++ -std=c++17 -o cache main.cpp
-   to run : ./cache
+There are a couple of limitations in the current implementation. First, if a key or value contains spaces, stringstream splits the input on whitespace, so those keys or values are parsed incorrectly. Second, every successful GET, SET, and DELETE rewrites the entire cache to disk to preserve the LRU order. This works for a small project, but it would become inefficient for a large cache or a high request rate because of the frequent disk writes.
+
+   
 ## Resources used
 
 - [Beej's Guide to Network Programming](https://beej.us/guide/bgnet/) — sockets
